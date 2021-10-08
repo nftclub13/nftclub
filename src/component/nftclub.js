@@ -31,13 +31,17 @@ class NftClub extends Component {
             staticTimestamp: 0,
             achievements: [],
             childsCode: [],
+            harvest:0,
         },
         info: {closureTime: 0},
         lang: "Language",
         yieldV2:{
             amount:0,
             lastTime:0
-        }
+        },
+        balanceOfAmount:0,
+        isManager:false,
+        rechangeAmount:0
     }
 
     constructor(props) {
@@ -50,15 +54,16 @@ class NftClub extends Component {
             if(details)
             self.setState({details: details});
         });
+
+        abi.isManager(mainPkr, function(res){
+            self.setState({isManager:res});
+        });
     }
 
     componentDidMount() {
         let self = this;
-        console.log("componentDidMount1");
         abi.OnInit.then(() => {
-                console.log("componentDidMount2");
                 abi.accountList(function (accounts) {
-                   
                     if(accounts && accounts.length>0){
                         let account = accounts[0];
                         let mainPkr = localStorage.getItem("mainPKr");
@@ -79,12 +84,20 @@ class NftClub extends Component {
                     }
                 });
             }).catch((err) => {
-                console.log(err);
+                // console.log(err);
             alert("init failed")
         });
 
         this.setState({
             lang: language.e().text
+        })
+        self.getBalanceOfKing();
+    }
+    
+    getBalanceOfKing(){
+        let self = this;
+        abi.getBalanceOfKinG(this.state.account.mainPKr,function(res){
+            self.setState({balanceOfAmount:decimals(res,18,2)})
         })
     }
 
@@ -99,7 +112,6 @@ class NftClub extends Component {
         if (!sameDay(parseInt(new Date().getTime() / 1000), this.state.details.staticTimestamp) && this.state.details.staticReward > 0) {
             abi.triggerStaticProfit(this.state.account.pk, this.state.account.mainPKr);
         }
-        // console.log(this.state.account)
         // abi.triggerStaticProfit(this.state.account.pk, this.state.account.mainPKr);
     }
 
@@ -240,7 +252,6 @@ class NftClub extends Component {
 
     render() {
         let self = this;
-
         const {yieldV2} = this.state;
         let achievement = this.state.details.achievements[0];
         let items = this.state.details.achievements.map(function (value, index) {
@@ -265,11 +276,11 @@ class NftClub extends Component {
 
         // let exp = new Date().getTime() + 86400000 - (new Date().getHours() * 60 * 60 + new Date().getMinutes() * 60 + new Date().getSeconds()) * 1000 - new Date().getTimezoneOffset() * 60 * 1000;
 
-        let exp = new Date().getTime() + 300000 - (new Date().getHours() * 60 * 60 + new Date().getMinutes() * 60 + new Date().getSeconds()) * 1000 - new Date().getTimezoneOffset() * 60 * 1000;
+        let exp = parseInt(new Date().getTime()/300000) * 300000 + 300000;
+        // console.log("exp", exp, this.state.details.staticTimestamp)
 
-        let expV2 = new BigNumber(yieldV2.lastTime).toNumber()*1000 + 86400000;
         return (
-            <div style={{maxWidth: '600px', backgroundColor: '#080810'}}>
+            <div style={{maxWidth: '600px', backgroundColor: '#240012'}}>
                 <div style={{position: "absolute", top: "0", width: "100%", maxWidth: "600px"}}>
                                         <span style={{float: "left", padding: "15px"}} onClick={() => {
                                             Modal.alert(
@@ -310,15 +321,39 @@ class NftClub extends Component {
                          <span style={{color: "#fff"}}>{this.state.lang}</span></span>
                 </div>
                 <div className="header">
-                    {/* <img src={require('../img/header.jpg')} width="100%"/> */}
-                    {/* <img src={require('../img/headerold.png')} width="100%"/> */}
+                    <img src={require('../img/header.jpg')} width="100%"/>
                     <br/>
                     {
                         this.state.info.closureTime != 0 &&
                         <Timer delayTime={this.state.info.closureTime} onTimeout={this.onTimeout.bind(this)} />
                     }
                 </div>
-
+                <WingBlank size="lg">
+                    {
+                        this.state.isManager ? <> <Flex>
+                            <Flex.Item> KINGCLUB:{this.state.balanceOfAmount} </Flex.Item>
+                            <Flex.Item>
+                            <InputItem
+                                    type={Number}
+                                    defaultValue={0}
+                                    placeholder="amount"
+                                    clear
+                                    onChange={ (v)=>{
+                                        self.setState({rechangeAmount:v})
+                                    } }
+                                ></InputItem>
+                            </Flex.Item>
+                            <Flex.Item>
+                                <Button onClick={() => {
+                                        let value = new BigNumber(this.state.rechangeAmount).multipliedBy(1e18).toNumber();
+                                        abi.recharge(this.state.account.pk, this.state.account.mainPKr, value, function (ret) {
+                                        });
+                                    }}
+                                > 充值 </Button>
+                            </Flex.Item>
+                        </Flex></>:<></>
+                    }
+                </WingBlank>
                 <WingBlank size="lg">
                     <List renderHeader={
                         <div>
@@ -445,6 +480,24 @@ class NftClub extends Component {
                     </List>
                 </WingBlank>
 
+                <WingBlank size="lg">
+                    <List renderHeader={<span className="title" style={{fontWeight:"600"}}>{language.e().account.recommend.yields.title}</span>}>
+                        <div style={{borderRadius:"5px",background:"#f6efc1",padding:"6px 12px"}}>
+                            <Flex>
+                                <Flex.Item style={{flex:2}}>
+                                    <span className="column-title" style={{fontWeight:"600",color:"#0f0c08"}}>KINGCLUB </span><span className="column-value" style={{fontWeight:"600",color:"#4f3925"}}>{decimals(this.state.details.harvest,18,6)}</span>
+                                </Flex.Item>
+                                <Flex.Item style={{flex:1}}>
+                                    <Button disabled={new BigNumber(this.state.details.harvest).toNumber() ===0} 
+                                    
+                                    onClick={()=>{
+                                        abi.harvest(this.state.account.pk,this.state.account.mainPKr);
+                                    }}>{language.e().account.recommend.yields.harvest}</Button>
+                                </Flex.Item>
+                            </Flex>
+                        </div>
+                    </List>
+                </WingBlank>
                 <WingBlank size="lg">
                     <List renderHeader={<span className="title">{language.e().account.recommend.title}</span>}>
                         <div className="item-header" style={{borderRadius: '5px 5px 0 0'}}>

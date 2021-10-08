@@ -2,16 +2,17 @@ import serojs from 'serojs'
 import seropp from 'sero-pp'
 import BigNumber from 'bignumber.js'
 import {Toast} from 'antd-mobile'
-
+import { JsonRpc } from "./jsonrpc";
+const rpc = new JsonRpc();
 const config = {
     name: "NFTCLUB",
-    contractAddress: "2ErWVoq6NWg63dgsufuLmntiSWtasLCDJ4mT6QqAasdGUHsmGng5zAfRzi93VfeQBvVt4DNuf8TB1tMBoiAsdy8K",
+    contractAddress: "3j38i6MLCQfXFRipScB1FFxyoM7pyUTQPSTDoEa1qQu9c6zXsedpUZxDEjh5uTzZF9bwRZSon6vU8E9uhrjWjbu4",
     github: "https://gitee.com/nftclub13/nftclub",
     author: "NFTCLUB",
     url: document.location.href,
-    logo: document.location.protocol + '//' + document.location.host + document.location.pathname + '/../logo.png',
-    barColor:"#08080f",
-    navColor:"#08080f",
+    logo: document.location.protocol + '//' + document.location.host + document.location.pathname + '/logo.png',
+    barColor:"#240012",
+    navColor:"#240012",
     barMode:"dark",
     navMode:"light"
 }
@@ -41,25 +42,6 @@ const abiJSON = [
      "type": "function"
     },
     {
-     "constant": true,
-     "inputs": [
-      {
-       "name": "",
-       "type": "address"
-      }
-     ],
-     "name": "indexs",
-     "outputs": [
-      {
-       "name": "",
-       "type": "uint256"
-      }
-     ],
-     "payable": false,
-     "stateMutability": "view",
-     "type": "function"
-    },
-    {
      "constant": false,
      "inputs": [],
      "name": "withdraw",
@@ -69,58 +51,22 @@ const abiJSON = [
      "type": "function"
     },
     {
+     "constant": false,
+     "inputs": [],
+     "name": "harvest",
+     "outputs": [],
+     "payable": false,
+     "stateMutability": "nonpayable",
+     "type": "function"
+    },
+    {
      "constant": true,
-     "inputs": [
-      {
-       "name": "",
-       "type": "uint256"
-      }
-     ],
-     "name": "investors",
+     "inputs": [],
+     "name": "manager",
      "outputs": [
       {
-       "name": "id",
-       "type": "uint256"
-      },
-      {
-       "name": "parentId",
-       "type": "uint256"
-      },
-      {
-       "name": "value",
-       "type": "uint256"
-      },
-      {
-       "name": "returnValue",
-       "type": "uint256"
-      },
-      {
-       "name": "totalAynamicReward",
-       "type": "uint256"
-      },
-      {
-       "name": "staticReward",
-       "type": "uint256"
-      },
-      {
-       "name": "staticTimestamp",
-       "type": "uint256"
-      },
-      {
-       "name": "dynamicReward",
-       "type": "uint256"
-      },
-      {
-       "name": "dynamicTimestamp",
-       "type": "uint256"
-      },
-      {
-       "name": "canWithdrawValue",
-       "type": "uint256"
-      },
-      {
-       "name": "childsCode",
-       "type": "string"
+       "name": "",
+       "type": "address"
       }
      ],
      "payable": false,
@@ -215,6 +161,20 @@ const abiJSON = [
      "constant": false,
      "inputs": [
       {
+       "name": "newManager",
+       "type": "address"
+      }
+     ],
+     "name": "setManager",
+     "outputs": [],
+     "payable": false,
+     "stateMutability": "nonpayable",
+     "type": "function"
+    },
+    {
+     "constant": false,
+     "inputs": [
+      {
        "name": "newOwner",
        "type": "address"
       }
@@ -253,7 +213,7 @@ const abiJSON = [
      "name": "OwnershipTransferred",
      "type": "event"
     }
-]
+];
 
 const caddress = config.contractAddress;
 const contract = serojs.callContract(abiJSON, caddress);
@@ -265,7 +225,6 @@ class Abi {
         self.OnInit = new Promise(
             (resolve, reject) => {
                 seropp.init(config, function (rest) {
-                    console.log("init", rest);
                     if (rest === 'success') {
                         console.log("init success");
                         return resolve()
@@ -309,7 +268,6 @@ class Abi {
 
     details(mainPkr, code, callback) {
         this.callMethod('details', mainPkr, [code], function (json) {
-            console.log("details",json);
             if (!json || json === "0x0") {
                 callback({
                     code: "",
@@ -323,48 +281,71 @@ class Abi {
                     staticTimestamp: 0,
                     achievements: [],
                     childsCode: [],
+                    harvest:0,
                 })
             } else {
-                console.log("details", json);
                 json = json.replace("\"parentCode\":\"\"\"\",", "");
                 callback(JSON.parse(json));
             }
         });
     }
+    getFullAddress(pkrs, callback) {
+		seropp.getInfo(function (info) {
+			rpc.seroRpc(info.rpc, "sero_getFullAddress", [pkrs], function (rets) {
+				callback(rets);
+			});
+		});
+	}
 
-    // info(from, callback) {
-    //     this.callMethod('info', from, [], function (vals) {
+    getShortAddress(mianPKr, callback) {
+		seropp.getInfo(function (info) {
+			rpc.seroRpc(info.rpc, "sero_getShortAddress", [mianPKr], function (rets) {
+				callback(rets);
+			});
+		});
+	}
 
-    //         if (vals != "0x0") {
-    //             callback({
-    //                 closureTime: vals[0].toNumber(),
-    //                 balance: vals[1],
-    //                 fundAmount: vals[2],
-    //                 investorCount: parseInt(vals[3]),
-    //                 luckyCodes: vals[4].split(" ")
-    //             });
-    //         }
-    //     });
-    // }
+    getBalanceOfKinG(mainPkr, callback){
+        this.callMethod('balanceOfKING',mainPkr,[],function(res){
+            callback(res)
+        })  
+    }
 
-    // setWithdrawAddrs(from, mainPKr, addrs, callback) {
-    //     this.executeMethod('setWithdrawAddrs', from, mainPKr, [addrs], 0, callback);
-    // }
+    isManager(mainPKr, callback){
+        let self=this
+        self.callMethod('manager',mainPKr,[],function(ret){
+            
+            self.getFullAddress([ret], function (rets) {
+				if (callback) {
+                    // console.log(rets.result[ret], mainPKr);
+					callback(rets.result[ret] == mainPKr);
+				}
+			})
+        })
+    }
+
+    harvest(from, mainPKr, callback) {
+        this.executeMethod('harvest', from, mainPKr, [], 0, "SERO", callback);
+    } 
+
+    recharge(from, mainPKr, amount, callback) {
+        this.executeMethod('recharge', from, mainPKr, [], amount, "KINGCLUB", callback);
+    }
 
     triggerStaticProfit(from, mainPKr, callback) {
-        this.executeMethod('triggerStaticProfit', from, mainPKr, [], 0, callback);
+        this.executeMethod('triggerStaticProfit', from, mainPKr, [], 0,"NFTCLUB", callback);
     }
 
     reinvest(from, mainPKr, value, callback) {
-        this.executeMethod('reinvest', from, mainPKr, [value], 0, callback);
+        this.executeMethod('reinvest', from, mainPKr, [value], 0,"NFTCLUB", callback);
     }
 
     invest(from, mainPKr, value, code, callback) {
-        this.executeMethod('invest', from, mainPKr, [code], value, callback);
+        this.executeMethod('invest', from, mainPKr, [code], value,"NFTCLUB", callback);
     }
 
     withdraw(from, mainPKr, callback) {
-        this.executeMethod('withdraw', from, mainPKr, [], 0, callback);
+        this.executeMethod('withdraw', from, mainPKr, [], 0,"NFTCLUB", callback);
     }
 
     callMethod(_method, from, _args, callback) {
@@ -388,8 +369,7 @@ class Abi {
         });
     }
 
-
-    executeMethod(_method, from, mainPKr, args, value, callback) {
+    executeMethod(_method, from, mainPKr, args, value, cy, callback) {
         let that = this;
 
         let packData = contract.packData(_method, args);
@@ -399,7 +379,7 @@ class Abi {
             value: "0x" + value.toString(16),
             data: packData,
             gasPrice: "0x" + new BigNumber("1000000000").toString(16),
-            cy: "NFTCLUB",
+            cy: cy,
         };
         let estimateParam = {
             from: mainPKr,
@@ -407,7 +387,7 @@ class Abi {
             value: "0x" + value.toString(16),
             data: packData,
             gasPrice: "0x" + new BigNumber("1000000000").toString(16),
-            cy: "NFTCLUB",
+            cy: cy,
         }
         seropp.estimateGas(estimateParam, function (gas, err) {
             if (err) {
@@ -416,7 +396,6 @@ class Abi {
             } else {
                 let gasNum = new BigNumber(gas);
                 executeData["gas"] = "0x" + new BigNumber(gasNum.multipliedBy(2).toFixed(0)).toString(16);
-                console.log("executeData", executeData);
 
                 seropp.executeContract(executeData, function (res) {
                     if (callback) {

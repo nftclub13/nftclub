@@ -276,7 +276,7 @@ class NftClub extends Component {
 
         // let exp = new Date().getTime() + 86400000 - (new Date().getHours() * 60 * 60 + new Date().getMinutes() * 60 + new Date().getSeconds()) * 1000 - new Date().getTimezoneOffset() * 60 * 1000;
 
-        let exp = parseInt(new Date().getTime()/300000) * 300000 + 300000;
+        let exp = parseInt(new Date().getTime()/86400000) * 86400000 + 86400000;
         // console.log("exp", exp, this.state.details.staticTimestamp)
 
         return (

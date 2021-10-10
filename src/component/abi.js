@@ -6,7 +6,7 @@ import { JsonRpc } from "./jsonrpc";
 const rpc = new JsonRpc();
 const config = {
     name: "NFTCLUB",
-    contractAddress: "3j38i6MLCQfXFRipScB1FFxyoM7pyUTQPSTDoEa1qQu9c6zXsedpUZxDEjh5uTzZF9bwRZSon6vU8E9uhrjWjbu4",
+    contractAddress: "4E1kW4vkCSQfFWgpTBDX5QqmpTYSuKNW1C4mWFQXTEApSzQhkDqD73vVcFV1kLAxxZfzswSE4bnhbwckF3zPvGVc",
     github: "https://gitee.com/nftclub13/nftclub",
     author: "NFTCLUB",
     url: document.location.href,

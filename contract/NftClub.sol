@@ -167,20 +167,20 @@ library SafeMath {
         }
 
         uint256 c = a * b;
-        require(c / a == b);
+        require(c / a == b, "mul error");
 
         return c;
     }
 
     function div(uint256 a, uint256 b) internal pure returns (uint256) {
-        require(b > 0);
+        require(b > 0, "div error");
         uint256 c = a / b;
 
         return c;
     }
 
     function sub(uint256 a, uint256 b) internal pure returns (uint256) {
-        require(b <= a);
+        require(b <= a, "sub error");
         uint256 c = a - b;
 
         return c;
@@ -188,7 +188,7 @@ library SafeMath {
 
     function add(uint256 a, uint256 b) internal pure returns (uint256) {
         uint256 c = a + b;
-        require(c >= a);
+        require(c >= a, "add error");
 
         return c;
     }
@@ -199,8 +199,6 @@ library Utils {
 
     function sameDay(uint day1, uint day2) internal pure returns (bool){
         return day1 / 24 / 3600 == day2 / 24 / 3600;
-        // return day1 / 600 == day2 / 600;
-        
     }
 
     function min(uint256 a, uint256 b) internal pure returns (uint256) {
@@ -239,86 +237,25 @@ library Utils {
     }
 }
 
-library Last {
-    struct List {
-        uint256[] indexs;
-        uint256[] timestamps;
-        uint256[] lastValues;
-    }
-
-    function list(List storage self) internal view returns (uint256[]) {
-        return self.indexs;
-    }
-
-    function contains(List storage self, uint256 id) internal view returns (bool flag, uint256 amount) {
-        for (uint256 i = 0; i < self.indexs.length; i++) {
-            if (self.indexs[i] == id) {
-                flag = true;
-                amount = amount + self.lastValues[i];
-            }
-        }
-        return;
-    }
-
-    function allValue(List storage self) internal view returns (uint256 all){
-        for (uint256 i = 0; i < self.indexs.length; i++) {
-            all += self.lastValues[i];
-        }
-        return all;
-    }
-
-    function clear(List storage self, uint256 id) internal {
-        for (uint256 i = 0; i < self.indexs.length; i++) {
-            if (self.indexs[i] == id) {
-                self.lastValues[i] = 0;
-            }
-        }
-    }
-
-    function add(List storage self, uint256 id, uint256 value) internal {
-        if (self.indexs.length == 10) {
-            uint256 index;
-            uint256 mint = self.timestamps[0];
-            for (uint256 i = 1; i < self.indexs.length; i++) {
-                if (self.timestamps[i] < mint) {
-                    mint = self.timestamps[i];
-                    index = i;
-                }
-            }
-            self.indexs[index] = id;
-            self.timestamps[index] = now;
-            self.lastValues[index] = value;
-        } else {
-            bool flag;
-            for (i = 0; i < self.indexs.length; i++) {
-                if (self.indexs[i] == id) {
-                    self.timestamps[i] = now;
-                    self.lastValues[i] = value;
-                    flag = true;
-                    break;
-                }
-            }
-            if(!flag) {
-                self.indexs.push(id);
-                self.timestamps.push(now);
-                self.lastValues.push(value);
-            }
-        }
-    }
-}
-
 contract Ownable {
 
     address public owner;
+    address public manager;
 
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     constructor() public {
         owner = msg.sender;
+        manager = msg.sender;
     }
 
     modifier onlyOwner() {
         require(msg.sender == owner);
+        _;
+    }
+    
+    modifier onlyManager() {
+        require(msg.sender == owner || msg.sender == manager);
         _;
     }
 
@@ -326,6 +263,10 @@ contract Ownable {
         require(newOwner != address(0));
         emit OwnershipTransferred(owner, newOwner);
         owner = newOwner;
+    }
+    
+    function setManager(address newManager) public onlyOwner {
+        manager = newManager;
     }
 }
 
@@ -395,21 +336,17 @@ interface CodeService {
 }
 
 
-contract NftClub is Ownable, SeroInterface {
+contract UBS is Ownable, SeroInterface {
 
     using SafeMath for uint256;
 
     uint256 private constant levels = 20;
-    uint256 private constant closurePeriod = 3 * 24 * 60 * 60; //30 * 60
 
     string private constant EMPTY = "";
-    string private constant SERO_CURRENCY = "SERO";
+    string private constant SERO_CURRENCY = "NFTCLUB";
     uint256 private constant minAmount = 1e19;
-    uint256 private constant tenThousand = 1e22;
 
     CodeService private codeService;
-    address[] private marketAddrs;
-    uint256 private closureTime;
 
     struct Investor {
         uint256 id;
@@ -425,17 +362,12 @@ contract NftClub is Ownable, SeroInterface {
 
         uint256 canWithdrawValue;
 
-        uint256[] values;
-        string childsCode;
-        
-        address[] withdrawAddrs;
+        uint256[] achievements;
     }
 
     Investor[] private investors;
     mapping(address => uint256) private indexs;
-
-    using Last for Last.List;
-    Last.List private lastInvestors;
+    mapping(address => uint256) private harvests;
 
 
     uint256 private preTotalShare;
@@ -446,45 +378,25 @@ contract NftClub is Ownable, SeroInterface {
 
     uint256 private triggerStaticNum = 20;
     
-    uint256 private fundAmount;
     uint256 private cash;
+    
+    uint256 private ratio = 10000;
 
-    constructor(address[] _marketAddrs, address _codeServiceAddr) public {
-        marketAddrs = _marketAddrs;
+    constructor(address _codeServiceAddr) public {
         codeService = CodeService(_codeServiceAddr);
-        investors.push(Investor({id : 0, parentId : 0, value : 0, returnValue : 0, totalAynamicReward:0, staticReward:0, staticTimestamp : 0, dynamicReward:0, dynamicTimestamp:0, canWithdrawValue : 0, values : new uint256[](0), childsCode : "",withdrawAddrs:new address[](0)}));
+        investors.push(Investor({id : 0, parentId : 0, value : 0, returnValue : 0, totalAynamicReward:0, staticReward:0, staticTimestamp : 0, dynamicReward:0, dynamicTimestamp:0, canWithdrawValue : 0, achievements : new uint256[](0)}));
     }
-
-    function setWithdrawAddrs(address[] addrs) public {
-        require(addrs.length > 0);
-        uint256 index = indexs[msg.sender];
-        if(index != 0) {
-            Investor storage self = investors[index];
-            self.withdrawAddrs = addrs;
-        }
+    
+    function setRatio(uint newRatio) public onlyManager {
+        ratio = newRatio;
     }
 
     function registerNode(address addr) public onlyOwner {
         require(!Utils.isContract(addr));
         uint256 index = investors.length;
         indexs[addr] = index;
-        investors.push(Investor({id : index, parentId : 0, value : 0, returnValue : 0, totalAynamicReward:0, staticReward:0, staticTimestamp : now, dynamicReward:0, dynamicTimestamp:now, canWithdrawValue : 0, values : new uint256[](0), childsCode : "",withdrawAddrs:new address[](0)}));
+        investors.push(Investor({id : index, parentId : 0, value : 0, returnValue : 0, totalAynamicReward:0, staticReward:0, staticTimestamp : now, dynamicReward:0, dynamicTimestamp:now, canWithdrawValue : 0, achievements : new uint256[](0)}));
     }
-
-    function info() public view returns (uint256, uint256, uint256, uint256, string) {
-        if (closureTime != 0) {
-            string memory luckyCodes;
-            uint256[] memory list = lastInvestors.list();
-            strings.slice[] memory parts = new strings.slice[](list.length);
-            for (uint256 i = 0; i < list.length; i++) {
-                parts[i] = strings.toSlice(codeService.encode(uint64(list[i])));
-            }
-            luckyCodes = strings.join(strings.toSlice(" "), parts);
-            return (closureTime, sero_balanceOf(SERO_CURRENCY).sub(cash), fundAmount, investors.length, luckyCodes);
-        }
-        return (0, 0, fundAmount, investors.length, "");
-    }
-
 
     function details(string memory code) public view returns (string json) {
         if(indexs[msg.sender] == 0) {
@@ -506,8 +418,6 @@ contract NftClub is Ownable, SeroInterface {
             }
         }
         
-        _beforeUpdate();
-        
         string[] memory vals = new string[](11);
         vals[0] = JSON.toJsonString("\"selfCode\"",codeService.encode(uint64(self.id)));
         vals[1] = JSON.toJsonString("\"parentCode\"",self.parentId == 0 ? "\"\"" : codeService.encode(uint64(self.parentId)));
@@ -516,13 +426,7 @@ contract NftClub is Ownable, SeroInterface {
         vals[4] = JSON.uintToJson("\"totalAynamicReward\"", self.totalAynamicReward);
         
         uint256 canWithdraw = self.canWithdrawValue;
-        if(closureTime !=0 && now > closureTime) {
-            uint256 balance = sero_balanceOf(SERO_CURRENCY).sub(cash);
-            (bool lucky, uint256 lastValue) = lastInvestors.contains(indexs[msg.sender]);
-            if (lucky && lastValue > 0) {
-                canWithdraw = canWithdraw.add(balance.mul(lastValue).div(lastInvestors.allValue()));
-            }
-        }
+  
         vals[5] = JSON.uintToJson("\"canWithdraw\"", canWithdraw);
  
         if(Utils.sameDay(self.staticTimestamp, now)) {
@@ -538,8 +442,8 @@ contract NftClub is Ownable, SeroInterface {
         }
         
         vals[8] = JSON.uintToJson("\"staticTimestamp\"", self.staticTimestamp);
-        vals[9] = JSON.toJsonString("\"childsCode\"", self.childsCode);
-        vals[10] = JSON.uintsToJson("\"values\"", self.values);
+        vals[9] = JSON.uintsToJson("\"achievements\"", self.achievements);
+        vals[10] = JSON.uintToJson("\"harvest\"", harvests[msg.sender]);
         
         json = JSON.toJsonMap(vals);
         return;
@@ -555,7 +459,7 @@ contract NftClub is Ownable, SeroInterface {
 
    
     function calceStaticReward(Investor storage self, uint256 maxReward) internal view returns (uint256 value){
-        if(preRewardAmount == 0 || preTotalShare == 0 || closureTime != 0) {
+        if(preRewardAmount == 0 || preTotalShare == 0) {
             return 0;
         }
 
@@ -565,13 +469,9 @@ contract NftClub is Ownable, SeroInterface {
         }
     }
     
-    function payStaticReward(Investor storage self, uint256 maxReward) internal returns (bool flag, uint256 value){
-        ckeckCountDown();
-        if(closureTime != 0) {
-            return (true, 0);
-        }
+    function payStaticReward(Investor storage self, uint256 maxReward) internal returns (uint256 value){
         self.staticTimestamp = now;
-        value = calceStaticReward(self,maxReward);
+        value = calceStaticReward(self, maxReward);
         self.staticReward = value;
         
         if (self.parentId > 0) {
@@ -579,7 +479,11 @@ contract NftClub is Ownable, SeroInterface {
             uint256 height = 0;
             while (current.parentId != 0 && height < levels) {
                 current = investors[current.parentId];
-                current.values[height] = current.values[height].sub(value);
+                if(current.achievements[height] > value) {
+                    current.achievements[height] = current.achievements[height].sub(value);
+                } else {
+                    current.achievements[height] = 0;
+                }
                 height++;
             }
         }
@@ -588,12 +492,8 @@ contract NftClub is Ownable, SeroInterface {
         self.returnValue = self.returnValue.add(value);
     }
     
-    function payDynamicReward(Investor storage self, uint256 maxReward, uint256 height) internal returns (bool flag, uint256 value) {
-        ckeckCountDown();
-        if(closureTime != 0) {
-            return (true, 0);
-        }
-        
+    function payDynamicReward(Investor storage self, uint256 maxReward, uint256 height) internal returns (uint256 value) {
+      
         if(self.value.sub(self.returnValue).div(3) >=1e23) {
             value = maxReward;
         } else {
@@ -616,30 +516,22 @@ contract NftClub is Ownable, SeroInterface {
     }
 
     function calceReward(Investor storage self) internal returns (uint256 , uint256) {
-        (bool flag, uint256 reward) = payStaticReward(self, self.value.sub(self.returnValue));
-        if(flag) {
-            return;
-        }
+        uint256 reward = payStaticReward(self, self.value.sub(self.returnValue));
+        
         uint256 amount = reward;
         
         if (self.parentId > 0) {
             uint256 value;
             Investor storage current = investors[self.parentId];
-            (flag, value) = payDynamicReward(current, reward, 0);
-            if(flag) {
-                return (reward, amount);
-            }
-            
+            value = payDynamicReward(current, reward, 0);
+           
             amount = amount.add(value);
 
             uint256 height = 1;
-            while (current.parentId != 0 && height < levels && closureTime == 0) {
+            while (current.parentId != 0 && height < levels) {
                 current = investors[current.parentId];
-                if (current.values[0].div(1e22) > height && current.returnValue < current.value) {
-                    (flag, value) = payDynamicReward(current, reward, height);
-                    if(flag) {
-                       return (reward, amount);
-                    }
+                if (current.achievements[0].div(1e22) > height && current.returnValue < current.value) {
+                    value = payDynamicReward(current, reward, height);
                     amount = amount.add(value);
                 }
                 height++;
@@ -650,7 +542,7 @@ contract NftClub is Ownable, SeroInterface {
     }
 
     function triggerStaticProfit() public {
-        require(closureTime == 0);
+
         uint256 id = indexs[msg.sender];
         require(id != 0);
         
@@ -663,7 +555,7 @@ contract NftClub is Ownable, SeroInterface {
 
         uint256 allShare;
         uint256 allProfit;
-        for (uint256 i = id; i < Utils.min(investors.length, id + triggerStaticNum) && closureTime == 0; i++) {
+        for (uint256 i = id; i < Utils.min(investors.length, id + triggerStaticNum); i++) {
             Investor storage self = investors[i];
             if(!Utils.sameDay(self.staticTimestamp, now) && self.value > self.returnValue) {
                 (uint256 share, uint256 profit) = calceReward(self);
@@ -681,37 +573,11 @@ contract NftClub is Ownable, SeroInterface {
         Investor storage self = investors[index];
         
         uint256 value = self.canWithdrawValue;
-    
-        // if (self.parentId > 0) {
-        //     Investor storage current = self;
-        //     uint256 height = 0;
-        //     while (current.parentId != 0 && height < levels) {
-        //         current = investors[current.parentId];
-        //         current.values[height] = current.values[height].sub(value);
-        //         height++;
-        //     }
-        // }
-        
-        if (closureTime != 0 && now > closureTime) {
-            uint256 balance = sero_balanceOf(SERO_CURRENCY).sub(cash);
-            (bool lucky, uint256 lastValue) = lastInvestors.contains(index);
-            if (lucky && lastValue > 0) {
-                value = value.add(balance.mul(lastValue).div(lastInvestors.allValue()));
-                lastInvestors.clear(index);
-            }
-        }
         
         cash = cash.sub(self.canWithdrawValue);
         self.canWithdrawValue = 0;
     
-        if(self.withdrawAddrs.length == 0) {
-            require(sero_send_token(msg.sender, SERO_CURRENCY, value));
-        } else {
-            for(uint256 i=0;i<self.withdrawAddrs.length;i++) {
-                require(sero_send_token(self.withdrawAddrs[i], SERO_CURRENCY, value.div(self.withdrawAddrs.length)));
-            }
-        }
-        
+        require(sero_send_token(msg.sender, SERO_CURRENCY, value));
     }
 
 
@@ -724,23 +590,28 @@ contract NftClub is Ownable, SeroInterface {
         Investor storage parent = investors[parentIndex];
         uint256 index = investors.length;
 
-        if (strings.equal(EMPTY, parent.childsCode)) {
-            parent.childsCode = codeService.encode(uint64(index));
-        } else {
-            parent.childsCode = strings.concat(
-                strings.toSlice(strings.concat(
-                    strings.toSlice(parent.childsCode),
-                    strings.toSlice(" "))),
-                strings.toSlice(codeService.encode(uint64(index))));
-        }
-
         indexs[msg.sender] = index;
-        investors.push(Investor({id : index, parentId : parentIndex, value : 0, returnValue : 0, totalAynamicReward:0, staticReward:0, staticTimestamp : now, dynamicReward:0, dynamicTimestamp:now, canWithdrawValue : 0, values : new uint256[](0), childsCode : "",withdrawAddrs:new address[](0)}));
+        investors.push(Investor({id : index, parentId : parentIndex, value : 0, returnValue : 0, totalAynamicReward:0, staticReward:0, staticTimestamp : now, dynamicReward:0, dynamicTimestamp:now, canWithdrawValue : 0, achievements : new uint256[](0)}));
+    }
+    
+    function recharge() public payable {
+        require(strings.equal(sero_msg_currency(), "KINGCLUB"));
+    }
+    
+    function balanceOfKING() public view returns(uint) {
+        return sero_balanceOf("KINGCLUB");
+    }
+    
+    function harvest() public {
+        uint value = harvests[msg.sender];
+        require(value > 0, "value is zero");
+        harvests[msg.sender] = 0;
+        require(sero_send_token(msg.sender, "KINGCLUB", value));
     }
 
     function reinvest(uint256 reinvestValue) public {
         require(minAmount <= reinvestValue || reinvestValue == 0);
-        require(closureTime == 0 || now < closureTime);
+     
         uint256 index = indexs[msg.sender];
         require(index != 0);
         Investor storage self = investors[index];
@@ -755,16 +626,18 @@ contract NftClub is Ownable, SeroInterface {
         cash = cash.sub(reinvestValue);
         
         investValue(self, reinvestValue);
+        
+        harvests[msg.sender] = harvests[msg.sender].add(reinvestValue/ratio);
+  
     }
 
     function invest(string memory code) public payable {
-        require(closureTime == 0 || now < closureTime);
         require(strings.equal(SERO_CURRENCY, sero_msg_currency()));
         require(msg.value >= minAmount);
         
         uint256 index = indexs[msg.sender];
         if (index == 0) {
-            require(!strings.equal(code, ""));
+            require(!strings.equal(code, ""), "code error");
             register(code);
             index = indexs[msg.sender];
         }
@@ -776,13 +649,6 @@ contract NftClub is Ownable, SeroInterface {
     function investValue(Investor storage self, uint256 value) internal {
         _beforeUpdate();
         
-        fundAmount = fundAmount.add(value.div(50));
-        require(sero_send_token(owner, SERO_CURRENCY, value.div(50)));
-        uint256 marketValue = value.div(25).div(marketAddrs.length);
-        for(uint256 i = 0;i<marketAddrs.length;i++) {
-            require(sero_send_token(marketAddrs[i], SERO_CURRENCY, marketValue));
-        }
-
         self.value = self.value.add(value.mul(3));
         if (self.parentId > 0) {
             Investor storage current = self;
@@ -790,30 +656,22 @@ contract NftClub is Ownable, SeroInterface {
             uint256 height = 0;
             while (current.parentId != 0 && height < levels) {
                 current = investors[current.parentId];
-                if(current.values.length == height) {
-                     current.values.push(value);
+                if(current.achievements.length == height) {
+                     current.achievements.push(value);
                 } else {
-                     current.values[height] = current.values[height].add(value);
+                     current.achievements[height] = current.achievements[height].add(value);
                 }
                 height++;
             }
         }
         
         totalShare = totalShare.add(value.mul(3));
-
-        lastInvestors.add(self.id, value);
-        if (closureTime != 0) {
-            closureTime = 0;
-        }
     }
 
     function balanceOfPool() internal view returns (uint256) {
-        return sero_balanceOf(SERO_CURRENCY).sub(msg.value).sub(cash).sub(fundAmount);
-    }
-
-    function ckeckCountDown() internal {
-        if (balanceOfPool() < fundAmount.div(20)) {
-            closureTime = now + closurePeriod;
-        }
+        return sero_balanceOf(SERO_CURRENCY).sub(msg.value).sub(cash);
     }
 }
+
+
+

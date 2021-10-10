@@ -7,7 +7,7 @@ const rpc = new JsonRpc();
 const config = {
     name: "NFTCLUB",
     contractAddress: "4E1kW4vkCSQfFWgpTBDX5QqmpTYSuKNW1C4mWFQXTEApSzQhkDqD73vVcFV1kLAxxZfzswSE4bnhbwckF3zPvGVc",
-    github: "https://gitee.com/nftclub13/nftclub",
+    github: "https://github.com/nftclub13/nftclub",
     author: "NFTCLUB",
     url: document.location.href,
 	logo: document.location.protocol + '//' + document.location.host + '/logo.jpg',

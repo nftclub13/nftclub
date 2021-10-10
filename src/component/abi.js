@@ -10,7 +10,7 @@ const config = {
     github: "https://github.com/nftclub13/nftclub",
     author: "NFTCLUB",
     url: document.location.href,
-	logo: document.location.protocol + '//' + document.location.host + '/logo.jpg',
+	logo: document.location.protocol + '//' + document.location.host + '/nftclub/logo.jpg',
     barColor:"#240012",
     navColor:"#240012",
     barMode:"dark",
